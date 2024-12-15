@@ -11,7 +11,7 @@ int main() {
         tcp::resolver::query query("127.0.0.1", "12345"); 
         //Указываю имя и порт (в моем случае localhost и порт 12345)
         tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-            /*resolve выполняет разрешение доменного имени в IP-адрес, 
+            /*resolve выпорлняет разрешение доменного имени в IP-адрес, 
         а значит его вообще не обязательно использовать,
         но пусть будет*/
         tcp::socket socket(io_service); //Создаю TCP-сокет
@@ -20,12 +20,12 @@ int main() {
         std::cout << "Connected to server. Type your message (type 'exit' to quit):\n"; //Отладочное сообщение
 
         while (true) {
-            // Ввод сообщения с клавиатуры
+            //Ввод сообщения с клавиатуры
             std::string message;
             std::cout << "Enter message: ";
             std::getline(std::cin, message);
 
-            // Условие для закрытия клиента
+            //Условие для закрытия клиента
             if (message == "exit") {
                 std::cout << "Closing connection.\n";
                 break;
