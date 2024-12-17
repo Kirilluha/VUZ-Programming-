@@ -40,9 +40,9 @@ private:
             });
     }
 
-    udp::socket socket_; //Это чтобы каждый раз udp не писать
-    udp::endpoint remote_endpoint_; //Это тоже
-    std::array<char, 1024> buffer_; // Буфер для данных
+    udp::socket socket_; //Создаем сокет
+    udp::endpoint remote_endpoint_; //Создаю endpoint
+    std::array<char, 1024> buffer_; //Буфер для данных
 };
 
 int main() {
