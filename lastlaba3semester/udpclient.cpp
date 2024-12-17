@@ -75,7 +75,7 @@ private:
     //Функция обработки приема ответа
     void handle_receive(const boost::system::error_code& error, std::size_t bytes_transferred,
                        std::shared_ptr<std::array<char, 1024>> receive_buffer) {
-        if (!error && bytes_transferred > 0) {
+        if (!error) {
             std::string server_reply(receive_buffer->data(), bytes_transferred); //Функцией data переводим буфер в строку
             std::cout << "Reply from server: " << server_reply << "\n";
             start_write(); //После получения ответа снова переходим к отправке сообщения
