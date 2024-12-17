@@ -49,7 +49,6 @@ int main() {
     try {
         boost::asio::io_service io_service;
         UDPServer server(io_service, 12345);
-        std::cout << "UDP Server is running on port 12345...\n";
         io_service.run();
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
