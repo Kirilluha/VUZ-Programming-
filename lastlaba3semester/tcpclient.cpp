@@ -5,25 +5,27 @@
 
 using boost::asio::ip::tcp; //Упрощаем доступ к функциям TCP
 
-class AsyncClient { //Классклиента
+class AsyncClient { //Класс клиента
 public:
-    AsyncClient(boost::asio::io_service& io_service, const std::string& host, const std::string& port)
-        : socket_(io_service), resolver_(io_service) { //Создаем конструктор, принимающий io_service, хост и порт, по которому подключится клиент
+    //Создаем конструктор, принимающий io_service, хост и порт, по которому подключится клиент
+    AsyncClient(boost::asio::io_service& io_service, const std::string& host, const std::string& port) 
+        : socket_(io_service), 
+        resolver_(io_service) { 
 
         auto endpoints = resolver_.resolve(host, port);
         /*resolve выпорлняет разрешение доменного имени в IP-адрес, 
         а значит его вообще не обязательно использовать,
         но пусть будет для понимания структуры*/
         boost::asio::async_connect(socket_, endpoints,
-            boost::bind(&AsyncClient::connect, this, boost::asio::placeholders::error)); //Начинаем подключение и после подключения стартуем connect
+            boost::bind(&AsyncClient::connect, this, boost::asio::placeholders::error, host, port)); //Начинаем подключение и после подключения стартуем connect
 
     }
 
 private:
     //Фунция для проверки, успешное ли подключние, если да, то стартуем метод start_write
-    void connect(const boost::system::error_code& error) { //Передаем аргумент ошибки чтобы если что ее вывести
+    void connect(const boost::system::error_code& error, std::string host, std::string port) { //Передаем аргумент ошибки чтобы если что ее вывести
         if (!error) {
-            std::cout << "Connected to server. Type your message (type 'exit' to quit):\n";
+            std::cout << "Connected to TCP server at " << host << ":" << port << ". Type your message (type 'exit' to quit):\n";
             start_write();
         } else {
             std::cerr << "Connection failed: " << error.message() << "\n";
@@ -32,20 +34,29 @@ private:
     //Функция записи сообщения в консоли
     void start_write() {
         std::cout << "Enter message: ";
-        std::getline(std::cin, message_); //Считываем сообщение с консоли
+        std::getline(std::cin, message); //Считываем сообщение с консоли
 
-        if (message_ == "exit") { //Если пользователь вводит "exit", завершаем соединение
+        if (message == "exit") { //Если пользователь вводит "exit", завершаем соединение
             std::cout << "Closing connection.\n";
             socket_.close();
             return;
         }
 
-        //Асинхронная отправка сообщения функцией acync_write
-        boost::asio::async_write(socket_, boost::asio::buffer(message_),
-            boost::bind(&AsyncClient::reply, this, boost::asio::placeholders::error)); //Засовываем сообщение в буфер для отправки
+        if (message.empty()) { //Не отправляем пустые сообщения иначе сервер зависает
+        
+            std::cout << "Empty message not sent. Please enter a valid message.\n";
+            start_write(); //Запросить ввод снова
+            return;
+        }
+
+        //Отправка сообщения функцией acync_write
+        boost::asio::async_write(socket_, boost::asio::buffer(message),
+            boost::bind(&AsyncClient::reply, this, boost::asio::placeholders::error)); 
+        /* Засовываем сообщение в буфер для отправки и отправляем */
+
     }
 
-    //Функция получания ответа от сервера
+    //Функция получения ответа от сервера
     void reply(const boost::system::error_code& error) { //Передаем аргумент ошибки чтобы если что ее вывести
         if (!error) {
             //После отправки сообщения начинаем чтение ответа от сервера:
@@ -74,7 +85,7 @@ private:
 
     tcp::socket socket_; //Создаем переменную типа сокет
     tcp::resolver resolver_; //Создаем переменную типа ресолвер
-    std::string message_; //Строка с сообщением пользователя
+    std::string message; //Строка с сообщением клиента
 };
 
 int main() {
