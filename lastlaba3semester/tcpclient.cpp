@@ -1,56 +1,88 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/bind/bind.hpp>
+#include <memory>
 
-using boost::asio::ip::tcp; //Упрощаю доступ к функциям TCP
+using boost::asio::ip::tcp; //Упрощаем доступ к функциям TCP
+
+class AsyncClient { //Классклиента
+public:
+    AsyncClient(boost::asio::io_service& io_service, const std::string& host, const std::string& port)
+        : socket_(io_service), resolver_(io_service) { //Создаем конструктор, принимающий io_service, хост и порт, по которому подключится клиент
+
+        auto endpoints = resolver_.resolve(host, port);
+        /*resolve выпорлняет разрешение доменного имени в IP-адрес, 
+        а значит его вообще не обязательно использовать,
+        но пусть будет для понимания структуры*/
+        boost::asio::async_connect(socket_, endpoints,
+            boost::bind(&AsyncClient::connect, this, boost::asio::placeholders::error)); //Начинаем подключение и после подключения стартуем connect
+
+    }
+
+private:
+    //Фунция для проверки, успешное ли подключние, если да, то стартуем метод start_write
+    void connect(const boost::system::error_code& error) { //Передаем аргумент ошибки чтобы если что ее вывести
+        if (!error) {
+            std::cout << "Connected to server. Type your message (type 'exit' to quit):\n";
+            start_write();
+        } else {
+            std::cerr << "Connection failed: " << error.message() << "\n";
+        }
+    }
+    //Функция записи сообщения в консоли
+    void start_write() {
+        std::cout << "Enter message: ";
+        std::getline(std::cin, message_); //Считываем сообщение с консоли
+
+        if (message_ == "exit") { //Если пользователь вводит "exit", завершаем соединение
+            std::cout << "Closing connection.\n";
+            socket_.close();
+            return;
+        }
+
+        //Асинхронная отправка сообщения функцией acync_write
+        boost::asio::async_write(socket_, boost::asio::buffer(message_),
+            boost::bind(&AsyncClient::reply, this, boost::asio::placeholders::error)); //Засовываем сообщение в буфер для отправки
+    }
+
+    //Функция получания ответа от сервера
+    void reply(const boost::system::error_code& error) { //Передаем аргумент ошибки чтобы если что ее вывести
+        if (!error) {
+            //После отправки сообщения начинаем чтение ответа от сервера:
+
+            /*Переменная для хранения количества байт ответа от сервера используя умный указатель 
+            make_shared который не даст массиву очиститься до заверщения лямбда функции*/
+            auto buffer = std::make_shared<std::array<char, 1024>>(); 
+
+            //Читаем количество байт ответа
+            socket_.async_read_some(boost::asio::buffer(*buffer),
+                [this, buffer](const boost::system::error_code& error, std::size_t bytes_transferred) {
+                    if (!error) {
+                        std::cout << "Reply from server: "
+                                  << std::string(buffer->data(), bytes_transferred) << "\n"; //Функцией data переводим буфер в строку
+                        start_write(); //После получения ответа снова переходим к отправке сообщения
+                    } else {
+                        std::cerr << "Error reading reply: " << error.message() << "\n";
+                        socket_.close();
+                    }
+                });
+        } else {
+            std::cerr << "Error sending message: " << error.message() << "\n";
+            socket_.close();
+        }
+    }
+
+    tcp::socket socket_; //Создаем переменную типа сокет
+    tcp::resolver resolver_; //Создаем переменную типа ресолвер
+    std::string message_; //Строка с сообщением пользователя
+};
 
 int main() {
     try {
-        boost::asio::io_service io_service; //Запуск асинхронных операций
-        tcp::resolver resolver(io_service);
-        tcp::resolver::query query("127.0.0.1", "12345"); 
-        //Указываю имя и порт (в моем случае localhost и порт 12345)
-        tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-            /*resolve выпорлняет разрешение доменного имени в IP-адрес, 
-        а значит его вообще не обязательно использовать,
-        но пусть будет*/
-        tcp::socket socket(io_service); //Создаю TCP-сокет
-        boost::asio::connect(socket, endpoint_iterator); //Подключаемся к серверу
-
-        std::cout << "Connected to server. Type your message (type 'exit' to quit):\n"; //Отладочное сообщение
-
-        while (true) {
-            //Ввод сообщения с клавиатуры
-            std::string message;
-            std::cout << "Enter message: ";
-            std::getline(std::cin, message);
-
-            //Условие для закрытия клиента
-            if (message == "exit") {
-                std::cout << "Closing connection.\n";
-                break;
-            }
-
-            //Отправка сообщения на сервер
-            boost::asio::write(socket, boost::asio::buffer(message));
-
-            //Буфер для ответа сервера
-            char reply[1024];
-            boost::system::error_code error; //Инициализирую error
-
-            size_t reply_length = socket.read_some(boost::asio::buffer(reply), error); 
-            /*Читаю кол-во байтов ответа сервера и ошибки если она возникла*/
-
-            if (!error) { //Нет ошибки - выведется ответ
-                std::cout << "Reply from server: " << std::string(reply, reply_length) << "\n";
-            } 
-            else { //Есть ошибка - выведется что за ошибка и цикл завершится и все переподключится
-                std::cerr << "Error receiving reply: " << error.message() << "\n";
-                break;
-            }
-        }
-    } 
-    catch (std::exception& e) { //Обработка исключений
+        boost::asio::io_service io_service; //Переменная io_service для управления асинхронностью
+        AsyncClient client(io_service, "127.0.0.1", "12345"); //Подключение к серверу
+        io_service.run(); //Обработка асинхронных операций
+    } catch (std::exception& e) { //Обработка исключений
         std::cerr << "Exception: " << e.what() << "\n";
     }
     return 0;
